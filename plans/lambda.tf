@@ -36,7 +36,7 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
     lambda_function_arn = aws_lambda_function.report_graphs.arn
     events              = ["s3:ObjectCreated:*"]
     filter_prefix       = "${var.app_env}/accounts/"
-    filter_suffix       = "full-report.json"
+    filter_suffix       = ".json"
   }
   depends_on = [aws_lambda_permission.allow_bucket]
 }

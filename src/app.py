@@ -1,3 +1,5 @@
+import json
+
 import internals
 import services.aws
 
@@ -12,16 +14,24 @@ def handler(event, context):
         internals.logger.critical("Bad path")
         return
     _, _, account_name, *_ = trigger_object.split("/")
+    dashboard_compliance(trigger_object, account_name)
+    summaries(trigger_object, account_name)
+
+
+def dashboard_compliance(trigger_object: str, account_name: str):
+    if not trigger_object.endswith("full-report.json"):
+        return
+
     summary_keys = []
     charts = []
     results = []
-    prefix_key = f"{internals.APP_ENV}/accounts/{account_name}/results/"  # type: ignore
+    prefix_key = f"{internals.APP_ENV}/accounts/{account_name}/results/"
     try:
         summary_keys = services.aws.list_s3(prefix_key=prefix_key)
 
     except RuntimeError as err:
         internals.logger.exception(err)
-        return []
+        return
 
     chart_data = {
         internals.GraphLabel.PCIDSS3: {"week": [], "month": [], "year": []},
@@ -43,37 +53,49 @@ def handler(event, context):
         if not summary_key.endswith("full-report.json"):
             continue
         report = internals.FullReport(
-            account_name=account_name,  # type: ignore
+            account_name=account_name,
             report_id=summary_key.replace(prefix_key, "").replace(
                 "/full-report.json", ""
             ),
         ).load()
-        group_name, range_group, timestamp = internals.date_label(report.date)  # type: ignore
+        group_name, range_group, timestamp = internals.date_label(report.date)
         cur_results = {"group_name": group_name, "timestamp": timestamp}
-        for item in report.evaluations:  # type: ignore
+        for item in report.evaluations:
             if item.result_level == "pass":
                 continue
-            for compliance in item.compliance:  # type: ignore
+            for compliance in item.compliance:
                 if compliance.compliance == internals.ComplianceName.PCI_DSS:
                     if compliance.version == "3.2.1":
-                        cur_results.setdefault(internals.GraphLabel.PCIDSS3, _data.copy())  # type: ignore
-                        cur_results[internals.GraphLabel.PCIDSS3][range_group] += 1  # type: ignore
+                        cur_results.setdefault(
+                            internals.GraphLabel.PCIDSS3, _data.copy()
+                        )
+                        cur_results[internals.GraphLabel.PCIDSS3][range_group] += 1
                     if compliance.version == "4.0":
-                        cur_results.setdefault(internals.GraphLabel.PCIDSS4, _data.copy())  # type: ignore
-                        cur_results[internals.GraphLabel.PCIDSS4][range_group] += 1  # type: ignore
+                        cur_results.setdefault(
+                            internals.GraphLabel.PCIDSS4, _data.copy()
+                        )
+                        cur_results[internals.GraphLabel.PCIDSS4][range_group] += 1
                 if compliance.compliance == internals.ComplianceName.NIST_SP800_131A:
                     if compliance.version == "strict mode":
-                        cur_results.setdefault(internals.GraphLabel.NISTSP800_131A_STRICT, _data.copy())  # type: ignore
-                        cur_results[internals.GraphLabel.NISTSP800_131A_STRICT][range_group] += 1  # type: ignore
+                        cur_results.setdefault(
+                            internals.GraphLabel.NISTSP800_131A_STRICT, _data.copy()
+                        )
+                        cur_results[internals.GraphLabel.NISTSP800_131A_STRICT][
+                            range_group
+                        ] += 1
                     if compliance.version == "transition mode":
-                        cur_results.setdefault(internals.GraphLabel.NISTSP800_131A_TRANSITION, _data.copy())  # type: ignore
-                        cur_results[internals.GraphLabel.NISTSP800_131A_TRANSITION][range_group] += 1  # type: ignore
+                        cur_results.setdefault(
+                            internals.GraphLabel.NISTSP800_131A_TRANSITION, _data.copy()
+                        )
+                        cur_results[internals.GraphLabel.NISTSP800_131A_TRANSITION][
+                            range_group
+                        ] += 1
                 if (
                     compliance.compliance == internals.ComplianceName.FIPS_140_2
                     and compliance.version == "Annex A"
                 ):
-                    cur_results.setdefault(internals.GraphLabel.FIPS1402, _data.copy())  # type: ignore
-                    cur_results[internals.GraphLabel.FIPS1402][range_group] += 1  # type: ignore
+                    cur_results.setdefault(internals.GraphLabel.FIPS1402, _data.copy())
+                    cur_results[internals.GraphLabel.FIPS1402][range_group] += 1
         results.append(cur_results)
 
     agg_sums = {}
@@ -106,18 +128,48 @@ def handler(event, context):
                 ranges.add(r)
 
         charts.append(
-            internals.DashboardCompliance(
-                label=c, ranges=list(ranges), data=d  # type: ignore
-            )
+            internals.DashboardCompliance(label=c, ranges=list(ranges), data=d)
         )
 
     object_key = f"{internals.APP_ENV}/accounts/{account_name}/computed/dashboard-compliance.json"
     try:
-        return services.aws.store_s3(
-            path_key=object_key, value=[chart.dict() for chart in charts]
+        services.aws.store_s3(
+            path_key=object_key,
+            value=json.dumps([chart.dict() for chart in charts], default=str),
         )
 
     except RuntimeError as err:
         internals.logger.exception(err)
 
-    return False
+
+def summaries(trigger_object: str, account_name: str):
+    if not trigger_object.endswith("summary.json"):
+        return
+
+    summary_keys = []
+    results = []
+    prefix_key = f"{internals.APP_ENV}/accounts/{account_name}/results/"
+    try:
+        summary_keys = services.aws.list_s3(prefix_key=prefix_key)
+
+    except RuntimeError as err:
+        internals.logger.exception(err)
+        return
+
+    for summary_key in summary_keys:
+        if not summary_key.endswith("summary.json"):
+            continue
+        if report := internals.ReportSummary(
+            account_name=account_name,
+            report_id=summary_key.replace(prefix_key, "").replace("/summary.json", ""),
+        ).load():
+            results.append(report.dict())
+
+    object_key = f"{internals.APP_ENV}/accounts/{account_name}/computed/summaries.json"
+    try:
+        services.aws.store_s3(
+            path_key=object_key, value=json.dumps(results, default=str)
+        )
+
+    except RuntimeError as err:
+        internals.logger.exception(err)
