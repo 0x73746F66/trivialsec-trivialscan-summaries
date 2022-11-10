@@ -22,7 +22,7 @@ import services.aws
 
 CACHE_DIR = getenv("CACHE_DIR", "/tmp")
 APP_ENV = getenv("APP_ENV", "Dev")
-APP_NAME = getenv("APP_NAME", "trivialscan-dashboard-compliance-graphs")
+APP_NAME = getenv("APP_NAME", "trivialscan-summaries")
 DASHBOARD_URL = "https://www.trivialsec.com"
 logger = logging.getLogger()
 

@@ -1,11 +1,11 @@
 variables:
   BUILD_ENV: ci
   APP_ENV: Prod
-  SOURCE_FILE: prod-trivialscan-dashboard-compliance-graphs.zip
-  IMAGE_NAME: trivialscan-dashboard-compliance-graphs-ci
+  SOURCE_FILE: prod-trivialscan-summaries.zip
+  IMAGE_NAME: trivialscan-summaries-ci
   TF_VAR_app_env: Prod
   TF_VAR_log_level: WARNING
-  TF_VAR_app_name: trivialscan-dashboard-compliance-graphs
+  TF_VAR_app_name: trivialscan-summaries
   TF_LOG: WARN
 
 stages:
