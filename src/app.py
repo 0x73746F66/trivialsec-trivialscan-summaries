@@ -14,11 +14,7 @@ def handler(event, context):
         internals.logger.critical("Bad path")
         return
     _, _, account_name, *_ = trigger_object.split("/")
-    dashboard_compliance(trigger_object, account_name)
-    summaries(trigger_object, account_name)
 
-
-def dashboard_compliance(trigger_object: str, account_name: str):
     if not trigger_object.endswith("full-report.json"):
         return
 
@@ -136,39 +132,6 @@ def dashboard_compliance(trigger_object: str, account_name: str):
         services.aws.store_s3(
             path_key=object_key,
             value=json.dumps([chart.dict() for chart in charts], default=str),
-        )
-
-    except RuntimeError as err:
-        internals.logger.exception(err)
-
-
-def summaries(trigger_object: str, account_name: str):
-    if not trigger_object.endswith("summary.json"):
-        return
-
-    summary_keys = []
-    results = []
-    prefix_key = f"{internals.APP_ENV}/accounts/{account_name}/results/"
-    try:
-        summary_keys = services.aws.list_s3(prefix_key=prefix_key)
-
-    except RuntimeError as err:
-        internals.logger.exception(err)
-        return
-
-    for summary_key in summary_keys:
-        if not summary_key.endswith("summary.json"):
-            continue
-        if report := internals.ReportSummary(
-            account_name=account_name,
-            report_id=summary_key.replace(prefix_key, "").replace("/summary.json", ""),
-        ).load():
-            results.append(report.dict())
-
-    object_key = f"{internals.APP_ENV}/accounts/{account_name}/computed/summaries.json"
-    try:
-        services.aws.store_s3(
-            path_key=object_key, value=json.dumps(results, default=str)
         )
 
     except RuntimeError as err:
