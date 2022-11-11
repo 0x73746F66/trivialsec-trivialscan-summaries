@@ -12,7 +12,7 @@ resource "aws_lambda_function" "trivialscan_summaries" {
       APP_ENV = var.app_env
       APP_NAME = var.app_name
       LOG_LEVEL = var.log_level
-      STORE_BUCKET = data.terraform_remote_state.trivialscan_s3.outputs.trivialscan_store_bucket
+      STORE_BUCKET = "${data.terraform_remote_state.trivialscan_s3.outputs.trivialscan_store_bucket}"
     }
   }
   lifecycle {
@@ -24,19 +24,9 @@ resource "aws_lambda_function" "trivialscan_summaries" {
   tags = local.tags
 }
 resource "aws_lambda_permission" "allow_bucket" {
-  statement_id  = "${var.app_env}AllowExecutionFromS3Bucket"
+  statement_id  = "${var.app_env}AllowExecutionFromS3BucketSummaries"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.trivialscan_summaries.arn
   principal     = "s3.amazonaws.com"
   source_arn    = "arn:aws:s3:::${data.terraform_remote_state.trivialscan_s3.outputs.trivialscan_store_bucket}"
-}
-resource "aws_s3_bucket_notification" "bucket_notification" {
-  bucket = data.terraform_remote_state.trivialscan_s3.outputs.trivialscan_store_bucket
-  lambda_function {
-    lambda_function_arn = aws_lambda_function.trivialscan_summaries.arn
-    events              = ["s3:ObjectCreated:*"]
-    filter_prefix       = "${var.app_env}/accounts/"
-    filter_suffix       = "summary.json"
-  }
-  depends_on = [aws_lambda_permission.allow_bucket]
 }
